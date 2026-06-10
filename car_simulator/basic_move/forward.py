@@ -23,10 +23,11 @@ pygame.display.set_caption("Self-Driving Car Simulation")
 
 def main():
     print("Basic Forward ")
-    car_ = car.Car(160, 200, 0)   #x,y,angle
+    car_ = car.Car(30, 200, 0)   #x,y,angle
     clock = pygame.time.Clock()
     start_tick = pygame.time.get_ticks()
     run = True
+    counter = 0
 
     while run:
         clock.tick(40)
@@ -40,7 +41,10 @@ def main():
         
         # make_decision(car_)
         # steering angle >0 steer right, <0 steer left
-        car_.drive(2,0,0) #(speed, steering angle, brake)
+        if(counter < 100):
+            car_.drive(4,0,0) #(speed, steering angle, brake)
+        else:
+            car_.drive(0,0,100)
         car_.update()
         car_.draw(win)
 
@@ -52,6 +56,7 @@ def main():
 
 
         pygame.display.update()
+        counter += 1
 
     pygame.quit()
     sys.exit()

@@ -5,7 +5,7 @@ import pygame
 import math
 
 from transitions import Machine
-import stt_machine
+# import stt_machine
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),"..")))
 
@@ -44,7 +44,7 @@ def main():
     # sm_car_ = sm_car.SM_Car(car_init_position,states,transitions,'idle')
     sm_car_ = sm_car.SM_Car(car_init_position)
     # stt_machine_ = Machine(sm_car_,states=states,transitions=transitions,initial='idle')
-    wp1_ = [(sm_car_.car.position[0],sm_car_.car.position[1]) ,(500,290),(600,350),(700,450)]
+    wp1_ = [(sm_car_.car.position[0],sm_car_.car.position[1]) ,(300,290),(400,350),(600,200),(100,150)]
 
     sm_car_.set_waypoint(wp1_)
     #define callback for state machine to car

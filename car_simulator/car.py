@@ -4,21 +4,23 @@ import numpy as np
 
 class Car:
     def __init__(self, x, y, rad):
-        # self.x = x
-        # self.y = y
         self.car_angle = rad  # Facing right initially
         self.speed = 0
         self.rotation_speed = 2
         self.steer_angle = 0
-        self.brake_percent = 0
+        self.brake_input = 0 #in percentage
+        self.force_brake_velocity_control = 0   #in percentage
         
-        #force
-        self.force_motor = np.array([0.0,0.0,0.0])
-        self.force_centri = np.array([0.0,0.0,0.0])
-        self.force_drag = np.array([0.0,0.0,0.0])
-        self.force_result = np.array([0.0,0.0,0.0])
+        #force (internal)
+        self.force_motor_v = np.array([0.0,0.0,0.0])
         self.force_brake = 0
         self.force_brake_v = np.array([0.0,0.0,0.0])
+        self.force_centri = np.array([0.0,0.0,0.0])
+        self.force_car_v = np.array([0.0,0.0,0.0])
+        #force (external)
+        self.force_drag = np.array([0.0,0.0,0.0])
+        self.force_result_v = np.array([0.0,0.0,0.0])
+        
         #acceleration
         self.acceleration = 0
         self.acceleration_m = np.array([0.0,0.0,0.0])
@@ -32,11 +34,11 @@ class Car:
         self.radius_c = np.array([0.0,0.0,0.0])
         self.center_c = np.array([0.0,0.0,0.0])
         # limit
-        self.max_speed = 2
-        # self.max_acceleration = 0.5
-        self.const_acceleration = 0.01
+        self.max_speed = 5 
+        self.const_acceleration = 0.05
         self.max_steer = 45
-        self.const_drag = 0.000001
+        self.brake_coef = 7
+        self.const_drag = 0.0001
         
         # DESIRED
         self.speed_desi = 0
@@ -66,7 +68,7 @@ class Car:
             self.steer_angle = self.max_steer*(steer/abs(steer))
         else:
             self.steer_angle = steer
-        self.brake_percent = brk    #brake
+        self.brake_input = brk    #brake
         # print(f"1. drive: speed desi: {self.speed_desi}")
         # print(f"1. drive: steer angle: {self.steer_angle}")
 
@@ -74,15 +76,16 @@ class Car:
     def update(self):
         # Update position based on speed and car angle
         self.position_prev = self.position
-        print("2. update")
+        # print("2. update")
 
-        #acceleration
-        Car.calcAccelerationMag(self)
-        Car.calcAcceleration(self)
-        Car.calcForce(self)
+        #calculate internal dynamic (from car acceleration to force) 
+        Car.calcCarAccelerationMag(self)
+        Car.calcCarAccelerationVec(self)
+        Car.calcInternalForce(self) #including brake force
         Car.calcCentripetal(self)
-        Car.calcForceDrag(self)
 
+        #calculate external (drag, etc)
+        Car.calcForceDrag(self)
         Car.calcForceResultant(self)
         Car.calcAccelerationResult(self)
 
@@ -97,15 +100,15 @@ class Car:
         else:
 
             vpa = np.add(self.velocity, self.acceleration_r)
-            print(f"vpa: {vpa}")
+            # print(f"vpa: {vpa}")
             speed = np.linalg.norm(vpa)
-            print(f"speed: {speed}")
+            # print(f"speed: {speed}")
 
-            print(f"cos({math.radians(self.car_angle):.2f}) = {math.cos(math.radians(self.car_angle))}")
+            # print(f"cos({math.radians(self.car_angle):.2f}) = {math.cos(math.radians(self.car_angle))}")
             self.velocity[0] = speed*math.cos(math.radians(self.car_angle))
-            print(f"velocity[0]: {self.velocity[0]}")
+            # print(f"velocity[0]: {self.velocity[0]}")
             self.velocity[1] = speed*math.sin(math.radians(self.car_angle))
-            print(f"velocity: {self.velocity}")
+            # print(f"velocity: {self.velocity}")
 
             # self.velocity = np.add(self.velocity, self.acceleration_r)
 
@@ -114,33 +117,31 @@ class Car:
             #heading change
             self.car_angle += math.degrees((speed/self.length)*math.tan(math.radians(self.steer_angle)))
 
-        print(f"position: {self.position}")
-        print(f"velocity: {self.velocity}")
+        # print(f"position: {self.position}")
+        # print(f"velocity: {self.velocity} mag: {np.linalg.norm(self.velocity):.2f}")
         # print(f"acceleration: {self.acceleration_r}")
-        print(f"car_angle: {self.car_angle:.2f}")
+        # print(f"car_angle: {self.car_angle:.2f}")
+        print(f"OVERALL: force: {np.linalg.norm(self.force_result_v):.2f} | acceleration: {np.linalg.norm(self.acceleration_r):.2f}")
+        print(f"| velocity: {np.linalg.norm(self.velocity):.2f} | position: {self.position} | car angle: {self.car_angle:.2f}")
 
 
     #####################################################
-    def calcAccelerationMag(self):
+    def calcCarAccelerationMag(self):
         error = self.speed_desi - np.linalg.norm(self.velocity)
         if (error < 0.00001 and error > -0.00001): #reach the speed
             # print("2.1. cAM: achieve speed")
             self.acceleration = 0
-            self.force_brake = 0
-        # elif (self.max_acceleration -  self.acceleration <= 0):
-        #     self.acceleration = self.max_acceleration
-            # print("2.1. cAM: max_acceleration")
+            self.force_brake_velocity_control = 0
         elif (error < -0.00001): #exceed speed
-            self.force_brake = 0.1*np.linalg.norm(self.force_motor) #brake take 1/10 of the motor force
+            self.acceleration = 0
+            self.force_brake_velocity_control = 10
         else:
             self.acceleration = self.const_acceleration
-            self.force_brake = 0
-            # self.acceleration += 0.01
-            # print(f"2.1. cAM: increase acceleration")
-        print(f"error speed_desired-current_speed: {error:.2f}")
-        print(f"acceleration: {self.acceleration:.2f}")
+            self.force_brake_velocity_control = 0
+        # print(f"error speed_desired-current_speed: {error:.2f}")
+        # print(f"acceleration: {self.acceleration:.2f}")
 
-    def calcCarAcceleration(self):
+    def calcCarAccelerationVec(self):
         self.acceleration_m[0] = self.acceleration*math.cos(math.radians(self.car_angle))
         self.acceleration_m[1] = self.acceleration*math.sin(math.radians(self.car_angle))
         # if (self.acceleration < 0.001): # too small assume zero
@@ -148,15 +149,33 @@ class Car:
         # else:
         #     np.multiply(self.acceleration_m,self.acceleration)
         # np.multiply(self.acceleration_m,self.acceleration)
-        print(f"2.2. calcCarAcceleration: acceleration_m: {self.acceleration_m}")
+        # print(f"2.2. calcCarAccelerationVec: acceleration_m: {self.acceleration_m}")
 
-    def calcForce(self):
-        self.force_brake_v[0] = -1*self.force_brake*math.cos(math.radians(self.car_angle))
-        self.force_brake_v[1] = -1*self.force_brake*math.sin(math.radians(self.car_angle))
-        self.force_motor[0] = (self.acceleration_m[0]*self.mass) + self.force_brake_v[0]
-        self.force_motor[1] = (self.acceleration_m[1]*self.mass) + self.force_brake_v[1]
-        print(f"2.3. calcForce: force_motor: {self.force_motor}")
+    def calcInternalForce(self):
+        Car.calcMotorForce(self)
+        Car.calcBrakeForce(self)
+        self.force_car_v = self.force_motor_v + self.force_brake_v
+        # print(f"2.3. calcInternalForce: force_car_v: {self.force_car_v}")
 
+    def calcBrakeForce(self):
+        from_drive_input_brake = (self.brake_input/100)*self.brake_coef*np.linalg.norm(self.velocity)
+        from_velocity_control = (self.force_brake_velocity_control/100)*self.brake_coef*np.linalg.norm(self.velocity)
+        self.force_brake = from_drive_input_brake + from_velocity_control
+
+        unit_vector = np.array([0.0,0.0])
+        mag = np.linalg.norm(self.velocity)
+        if(mag <= 0 or np.isnan(mag)):
+            unit_vector = [0.0,0.0]
+        else:
+            unit_vector = self.velocity/mag
+        self.force_brake_v[0] = -1*self.force_brake*unit_vector[0]  #minus one since it is opposing the car direction
+        self.force_brake_v[1] = -1*self.force_brake*unit_vector[1]
+
+    def calcMotorForce(self):
+        self.force_motor_v[0] = (self.acceleration_m[0]*self.mass)
+        self.force_motor_v[1] = (self.acceleration_m[1]*self.mass)
+
+    #to be revised
     def calcCentripetal(self):
         if (np.linalg.norm(self.radius_c) < 0.001):
             self.force_centri = [0,0,0]
@@ -165,23 +184,23 @@ class Car:
             self.force_centri = Car.rotate(self.force_centri,math.pi)
             m = ((self.mass*math.pow(np.linalg.norm(self.velocity),2))/np.linalg.norm(self.radius_c))
             self.force_centri = np.dot(self.force_centri,m)
-        # print(f"2.4. cC: force_centri: {self.force_centri}")
-    
+            # print(f"2.4. cC: force_centri: {self.force_centri}")
+
     def calcForceDrag(self):
         #assume to be opposite of the motor force direction
         #assume 1/100 of forward force
-        mag = np.linalg.norm(self.force_motor)
-        self.force_drag[0] = (-1*self.force_motor[0])*self.const_drag
-        self.force_drag[1] = (-1*self.force_motor[1])*self.const_drag
+        mag = np.linalg.norm(self.force_car_v)
+        self.force_drag[0] = (-1*self.force_car_v[0])*self.const_drag
+        self.force_drag[1] = (-1*self.force_car_v[1])*self.const_drag
         # print(f"2.5. cFD: frc_drg: {self.force_drag}")
 
     def calcForceResultant(self):
-        self.force_result[0] = self.force_motor[0] + self.force_drag[0] + self.force_centri[0]
-        self.force_result[1] = self.force_motor[1] + self.force_drag[1] + self.force_centri[1]
-        # print(f"2.5. cFR: frc_rslt: {self.force_result}")
+        self.force_result_v[0] = self.force_car_v[0] + self.force_drag[0] + self.force_centri[0]
+        self.force_result_v[1] = self.force_car_v[1] + self.force_drag[1] + self.force_centri[1]
+        # print(f"2.5. cFR: frc_rslt: {self.force_result_v}")
     
     def calcAccelerationResult(self):
-        self.acceleration_r = self.force_result/self.mass
+        self.acceleration_r = self.force_result_v/self.mass
         # print(f"2.6. cAR: acceleration_r: {self.acceleration_r}")
 
     # Rotate vector
@@ -218,7 +237,11 @@ class Car:
 
         win.blit(rotated_image, car_rect)
 
+    #########################################################################
 
+    def set_car_image(self, img):
+        self.image = pygame.image.load(img)
+        
     #########################################################################
 
     def cast_sensors(self, walls):

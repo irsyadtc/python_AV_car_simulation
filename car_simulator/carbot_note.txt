@@ -1,0 +1,40 @@
+progress
+- key in all states in sm_car2
+- draw waypoint: /
+- do key press to start moving
+- display state:
+
+
+Set state machine
+    0_ready
+    move0_1
+    1_onBoomGate
+    move1_3
+    3_obstruction
+    move3_4
+    4_onRoundabout
+    move4_5
+    5_inTunnel
+    move5_6
+    6_onHill
+    move6_2
+    2_onBumper
+    move2_7
+    7_onTrafficLight
+    move7_1
+    8_parallelParking
+    9_perpendicularParking
+
+set checkpoint list
+(899,331) start_point
+(720,331) 1_onBoomGate
+(552,331) 3_obstruction
+(397,382) 4_onRoundabout
+(230,408) roundaboutExit1
+(160,383) 5_inTunnel
+(45,273)  TunnelExit
+272,65 6_onHill
+613,65 2_onBumper
+698,65 offBumper
+287,235 8_parallelParking
+368,164 9_perpendicularParking
